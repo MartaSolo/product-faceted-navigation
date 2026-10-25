@@ -25,11 +25,13 @@ export const PRODUCT_SORT_OPTIONS = [
   "power-desc",
 ] as const;
 
-export const productCategorySchema = z.enum([
+export const PRODUCT_CATEGORIES = [
   "battery",
   "solar panel",
   "connector",
-]);
+] as const;
+
+export const productCategorySchema = z.enum(PRODUCT_CATEGORIES);
 
 export const productSortSchema = z.enum(PRODUCT_SORT_OPTIONS);
 
