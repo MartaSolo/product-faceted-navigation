@@ -14,6 +14,8 @@ definePageMeta({
 
 const { appliedQuery, updateFilters, clearAll } = useProductFilters();
 
+useListingSeo(appliedQuery);
+
 const searchQuery = ref("");
 
 watch(
