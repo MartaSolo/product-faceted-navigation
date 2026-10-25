@@ -1,3 +1,9 @@
+<script setup lang="ts">
+definePageMeta({
+  middleware: "products",
+});
+</script>
+
 <template>
   <main>
     <UContainer class="py-12 sm:py-16">

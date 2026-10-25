@@ -1,14 +1,10 @@
 import type { ProductsResponse } from "#shared/types/api";
 import type { Product } from "#shared/types/product";
 import type { ProductQuery } from "#shared/schemas/product-query";
-import {
-  PRODUCT_QUERY_KEYS,
-  productCategorySchema,
-  productQuerySchema,
-} from "#shared/schemas/product-query";
+import type { RawProductQuery } from "#shared/utils/product-query";
+import { parseProductQuery } from "#shared/utils/product-query";
 
 const PAGE_SIZE = 12;
-type RawQuery = Record<string, string | string[] | undefined>;
 
 interface IndexedProduct {
   product: Product;
@@ -21,36 +17,27 @@ interface IndexedProduct {
 // that requested manufacturers exist in the selected category. Unknown query
 // keys are ignored. The returned query is safe to use for filtering, sorting
 // and pagination.
-const parseProductQuery = (rawQuery: RawQuery, products: Product[]) => {
-  const singleValueQuery: Record<string, string | undefined> = {};
+const parseValidatedProductQuery = (
+  rawQuery: RawProductQuery,
+  products: Product[],
+) => {
+  const queryResult = parseProductQuery(rawQuery);
 
-  for (const key of PRODUCT_QUERY_KEYS) {
-    const value = rawQuery[key];
-
-    if (Array.isArray(value)) {
+  if (!queryResult.success) {
+    if (queryResult.reason === "duplicate") {
       throw createError({
         statusCode: 400,
-        statusMessage: `Query parameter "${key}" cannot be repeated.`,
+        statusMessage: `Query parameter "${queryResult.key}" cannot be repeated.`,
       });
     }
 
-    singleValueQuery[key] = value;
-  }
+    if (queryResult.reason === "unknown-category") {
+      throw createError({
+        statusCode: 404,
+        statusMessage: "Product category not found.",
+      });
+    }
 
-  const categoryResult = productCategorySchema.safeParse(
-    singleValueQuery.category,
-  );
-
-  if (singleValueQuery.category !== undefined && !categoryResult.success) {
-    throw createError({
-      statusCode: 404,
-      statusMessage: "Product category not found.",
-    });
-  }
-
-  const queryResult = productQuerySchema.safeParse(singleValueQuery);
-
-  if (!queryResult.success) {
     throw createError({
       statusCode: 400,
       statusMessage: "Invalid product query.",
@@ -68,6 +55,7 @@ const parseProductQuery = (rawQuery: RawQuery, products: Product[]) => {
         )
         .map((product) => product.manufacturer),
     );
+
     const hasUnknownManufacturer = query.manufacturer.some(
       (manufacturer) => !availableManufacturers.has(manufacturer),
     );
@@ -203,9 +191,9 @@ const compareProducts = (
 // sorting matching products, then applying pagination and creating metadata.
 export const createProductsResponse = (
   products: Product[],
-  rawQuery: RawQuery,
+  rawQuery: RawProductQuery,
 ): ProductsResponse => {
-  const query = parseProductQuery(rawQuery, products);
+  const query = parseValidatedProductQuery(rawQuery, products);
 
   const matchingProducts = products
     .map((product, originalIndex) => ({ product, originalIndex }))
