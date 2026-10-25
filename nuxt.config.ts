@@ -7,4 +7,12 @@ export default defineNuxtConfig({
   typescript: {
     strict: true,
   },
+  nitro: {
+    serverAssets: [
+      {
+        baseName: "products",
+        dir: "./data",
+      },
+    ],
+  },
 });
