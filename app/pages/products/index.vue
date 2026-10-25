@@ -1,14 +1,73 @@
 <script setup lang="ts">
 import type { NuxtError } from "#app";
+import ProductFilters from "~/components/products/ProductFilters.vue";
+import ProductListItem from "~/components/products/ProductListItem.vue";
+import ProductPagination from "~/components/products/ProductPagination.vue";
 import type { ProductsResponse } from "#shared/types/api";
 import type { FiltersResponse } from "#shared/types/filters";
+import { productSortSchema } from "#shared/schemas/product-query";
 import { buildProductQuery } from "#shared/utils/product-query";
 
 definePageMeta({
   middleware: "products",
 });
 
-const { appliedQuery, clearAll } = useProductFilters();
+const { appliedQuery, updateFilters, clearAll } = useProductFilters();
+
+const searchQuery = ref("");
+
+watch(
+  () => appliedQuery.value.q,
+  (query) => {
+    searchQuery.value = query ?? "";
+  },
+  { immediate: true },
+);
+
+const submitSearch = () =>
+  updateFilters({ q: searchQuery.value.trim() || undefined });
+
+const commonSortItems = [
+  { label: "Default", value: "default" },
+  { label: "Price: low to high", value: "price-asc" },
+  { label: "Price: high to low", value: "price-desc" },
+  { label: "Name: A to Z", value: "name-asc" },
+  { label: "Name: Z to A", value: "name-desc" },
+];
+
+const sortItems = computed(() => {
+  if (appliedQuery.value.category === "battery") {
+    return [
+      ...commonSortItems,
+      { label: "Capacity: low to high", value: "capacity-asc" },
+      { label: "Capacity: high to low", value: "capacity-desc" },
+    ];
+  }
+
+  if (appliedQuery.value.category === "solar panel") {
+    return [
+      ...commonSortItems,
+      { label: "Power: low to high", value: "power-asc" },
+      { label: "Power: high to low", value: "power-desc" },
+    ];
+  }
+
+  return commonSortItems;
+});
+
+const selectedSort = computed(() => appliedQuery.value.sort ?? "default");
+
+const changeSort = (value: unknown) => {
+  if (value === "default") {
+    return updateFilters({ sort: undefined });
+  }
+
+  const sort = productSortSchema.safeParse(value);
+
+  if (sort.success) {
+    return updateFilters({ sort: sort.data });
+  }
+};
 
 const productsApiQuery = computed(() => buildProductQuery(appliedQuery.value));
 const selectedCategory = computed(() => appliedQuery.value.category);
@@ -71,38 +130,115 @@ const isLoading = computed(
             Products
           </h1>
           <p class="max-w-2xl text-muted">
-            Showing {{ products?.meta.total ?? 0 }} products across
-            {{ filters?.categories.length ?? 0 }} categories.
+            {{ products?.meta.total ?? 0 }} products found.
           </p>
         </div>
 
-        <p v-if="isLoading" role="status" class="text-sm text-muted">
-          Loading products…
-        </p>
-
         <div
-          v-if="products?.data.length === 0"
-          class="space-y-3 rounded-lg border border-default p-6"
+          class="grid gap-8 lg:grid-cols-[minmax(0,16rem)_minmax(0,1fr)] lg:items-start"
         >
-          <p>No products match the current filters.</p>
-          <UButton color="neutral" variant="outline" @click="clearAll">
-            Clear all filters
-          </UButton>
-        </div>
-
-        <ul v-else class="divide-y divide-default" aria-label="Product list">
-          <li
-            v-for="product in products?.data"
-            :key="product.id"
-            class="space-y-1 py-4"
+          <aside
+            v-if="filters"
+            class="hidden rounded-lg border border-default p-5 lg:sticky lg:top-6 lg:block"
           >
-            <h2 class="font-medium">{{ product.name }}</h2>
-            <p class="text-sm text-muted">
-              {{ product.category }} · {{ product.manufacturer }} ·
-              {{ product.price }}
+            <ProductFilters :filters="filters" />
+          </aside>
+
+          <section class="min-w-0 space-y-6" aria-label="Products">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-end">
+              <form
+                class="flex min-w-0 flex-1 gap-2"
+                @submit.prevent="submitSearch"
+              >
+                <label for="product-search" class="sr-only">
+                  Search products
+                </label>
+                <UInput
+                  id="product-search"
+                  v-model="searchQuery"
+                  type="search"
+                  placeholder="Search products"
+                  icon="i-lucide-search"
+                  class="min-w-0 flex-1"
+                />
+                <UButton type="submit">Search</UButton>
+              </form>
+
+              <div class="flex items-end gap-2">
+                <UDrawer
+                  v-if="filters"
+                  title="Filters"
+                  description="Filter the product list"
+                  direction="left"
+                  close
+                >
+                  <UButton
+                    color="neutral"
+                    variant="outline"
+                    icon="i-lucide-list-filter"
+                    class="lg:hidden"
+                  >
+                    Filters
+                  </UButton>
+
+                  <template #body>
+                    <ProductFilters :filters="filters" />
+                  </template>
+                </UDrawer>
+
+                <div class="min-w-48 flex-1 sm:flex-none">
+                  <label
+                    for="product-sort"
+                    class="mb-1 block text-sm font-medium"
+                  >
+                    Sort by
+                  </label>
+                  <USelect
+                    id="product-sort"
+                    :model-value="selectedSort"
+                    :items="sortItems"
+                    value-key="value"
+                    class="w-full"
+                    @update:model-value="changeSort"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <p v-if="isLoading" role="status" class="text-sm text-muted">
+              Loading products…
             </p>
-          </li>
-        </ul>
+
+            <div
+              v-if="products?.data.length === 0"
+              class="space-y-3 rounded-lg border border-default p-6"
+            >
+              <p>No products match the current filters.</p>
+              <UButton color="neutral" variant="outline" @click="clearAll">
+                Clear all filters
+              </UButton>
+            </div>
+
+            <ul
+              v-else
+              class="divide-y divide-default"
+              aria-label="Product list"
+              :aria-busy="isLoading"
+            >
+              <ProductListItem
+                v-for="product in products?.data"
+                :key="product.id"
+                :product="product"
+              />
+            </ul>
+
+            <ProductPagination
+              v-if="products"
+              :meta="products.meta"
+              :query="appliedQuery"
+            />
+          </section>
+        </div>
       </div>
     </UContainer>
   </main>

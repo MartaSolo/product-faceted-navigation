@@ -4,6 +4,11 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   modules: ["@nuxt/eslint", "@nuxt/ui"],
   css: ["~/assets/css/main.css"],
+  ui: {
+    experimental: {
+      componentDetection: true,
+    },
+  },
   typescript: {
     strict: true,
   },
